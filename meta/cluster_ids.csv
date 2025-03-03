@@ -1,0 +1,58 @@
+﻿Cluster,Cell_Type,Manual
+0,T-cell,Cytotoxic T-cells
+1,T-cell,Effector Memory T-cells
+2,Myeloid,Macrophages
+3,B-cell,B-cells
+4,T-cell,Cytotoxic T-cells
+5,Myeloid,Monocytes or DC
+6,T-cell,Naive and Central Memory T-cells
+7,T-cell,Undefined T-cells
+8,T-cell,Effector Memory T-cells
+9,Myeloid,M1-like Macrophages
+10,Myeloid,Macrophages
+11,Epithelial,Luminal A
+12,T-cell,Effector Memory T-cells
+13,T-cell,Effector Memory T-cells
+14,Epithelial,Luminal A
+15,NK cell,NK cells
+16,T-cell,Effector Memory T-cells
+17,NK cell,NKT cells
+18,T-cell,Effector Memory T-cells
+19,T-cell,Effector Memory T-cells
+20,NK cell,NK cells
+21,T-cell,Treg cells
+22,Epithelial,Luminal B
+23,Plasmablasts,Plasma cells
+24,Myeloid,M1-like Macrophages
+25,T-cell,Effector Memory T-cells
+26,T-cell,Cytotoxic T-cells
+27,CAF,CAF
+28,Endothelial,Endothelial
+29,Plasmablasts,Plasma cells
+30,CAF,CAF
+31,T-cell,Effector Memory T-cells
+32,T-cell,Effector Memory T-cells
+33,Epithelial,Cycling epithelial
+34,Endothelial,Endothelial
+35,B-cell,B-cells
+36,T-cell,Cytotoxic T-cells
+37,T-cell,Effector Memory T-cells
+38,Endothelial,PVL
+39,Endothelial,PVL
+40,Proliferating Immune,Proliferating Immune
+41,Myeloid,pDC
+42,Myeloid,Monocytes
+43,Myeloid,Monocytes
+44,Epithelial,Luminal A
+45,Myeloid,cDC
+46,NK cell,NK cells
+47,Myeloid,Macrophages
+48,Epithelial,Cycling epithelial
+49,Epithelial,Cycling epithelial
+50,Endothelial,Endothelial
+51,Myeloid,M2-like Macrophages
+52,Endothelial,PVL
+53,T-cell,Treg cells
+54,B-cell,B-cells
+55,Epithelial,Luminal B
+56,T-cell,Treg cells

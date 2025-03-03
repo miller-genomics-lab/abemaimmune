@@ -1,0 +1,196 @@
+---
+title: "Myeloid Cluster 0 and 5 Comparison"
+format: html
+editor: visual
+---
+```{r SubsetMyeloid}
+# subset to cluster 0 and 5
+sub <-
+  subset(myeloid,
+         seurat_clusters %in% c("0","5"))
+sub$cluster_marker_celltype <-
+  factor(sub$cluster_marker_celltype,
+         levels = c("0:APOC1+ TAMs", "5:TREM2+ TAMs"))
+```
+
+```{r}
+# gsea set up
+go_bp <- 
+  msigdbr(species = "Homo sapiens",
+          category = "C5",
+          subcategory = "GO:BP") %>% 
+  split(x = .$gene_symbol,
+        f = .$gs_name)
+hallmark <- 
+  msigdbr(species = "Homo sapiens",
+          category = "H") %>% 
+  split(x = .$gene_symbol,
+        f = .$gs_name)
+kegg <- 
+  msigdbr(species = "Homo sapiens",
+          category = "C2",
+          subcategory = "CP:KEGG") %>% 
+                split(x = .$gene_symbol,
+                      f = .$gs_name)
+geneset_list <- 
+  list(HALLMARK = hallmark,
+       GO_BP = go_bp,
+       KEGG = kegg)
+genesets <-
+  c(hallmark, go_bp, kegg)
+
+# set up features to test for DE
+remove <- 
+  c(grep("\\.", rownames(sub)),
+    grep("^LINC", rownames(sub)),
+    grep("orf", rownames(sub)))
+features <- 
+  rownames(sub)[-c(remove)]
+
+Idents(sub) <- "cluster_marker_celltype"
+degs <-
+  FindMarkers(sub,
+              ident.1 = "0:APOC1+ TAMs",
+              ident.2 = "5:TREM2+ TAMs",
+              group.by = "cluster_marker_celltype",
+              features = features,
+              min.pct = 0.1,
+              logfc.threshold = 0.25,
+              assay = "RNA") %>%
+  rownames_to_column(var = "gene")
+degs$higher_in <-
+  ifelse(degs$avg_log2FC > 0,
+         "0:APOC1+ TAMs",
+         "5:TREM2+ TAMs")
+write.csv(degs,
+          file = paste0(tbl_dir, "myeloid_c0_vs_c5_degs.csv"))
+df <- 
+  degs[1:50,] %>%
+  arrange(desc(avg_log2FC))
+sub <-
+  ScaleData(sub,
+            features = df$gene,
+            assay = "RNA")
+DoHeatmap(subset(sub, downsample = 500),
+          features = df$gene,
+          assay = "RNA",
+          group.by = "cluster_marker_celltype",
+          angle = 0,
+          hjust = 0.5,
+          vjust = 0.25,
+          group.colors = ct_colors) &
+  title(NULL) &
+  theme(text = element_text(size = 14))
+ggsave(filename = paste0(fig_dir, "myeloid_c0_vs_c5_degs_heatmap.jpeg"),
+       height = 8,
+       width = 7)
+
+# do gsea
+df <- 
+  degs %>%
+  filter(p_val_adj <= 0.05) %>%
+  arrange(desc(avg_log2FC)) %>%
+  dplyr::select(gene, avg_log2FC)
+ranks <-
+  deframe(df)
+res <- 
+  fgseaMultilevel(genesets,
+                  ranks,
+                  minSize = 15,
+                  maxSize = 500) %>%
+  arrange(padj)
+fwrite(res, 
+       file = paste0(tbl_dir, "myeloid_c0_vs_c5_degs_gsea.csv"),
+       row.names = F,
+       quote = F)
+sig <-
+  res %>%
+  filter(pval <= 0.05) %>%
+  mutate(FDR = p.adjust(pval))
+fwrite(sig, 
+       file = paste0(tbl_dir, "myeloid_c0_vs_c5_degs_gsea_significant.csv"))
+# make GSEA dotplot
+df <-
+  sig %>%
+  filter(FDR <= 0.05) %>%
+  slice_max(abs(NES),
+            n = 20) %>%
+  arrange(desc(NES)) %>%
+  mutate(type = ifelse(NES < 0,
+                       "5:TREM2+ TAMs",
+                       "0:APOC1+ TAMs"),
+         nes = abs(NES),
+         pathway = gsub("_", " ", pathway)) %>%
+  as.data.frame()
+
+p <- 
+  df %>%
+  ggplot(aes(x = nes,
+             y = fct_reorder(pathway, nes))) + 
+  geom_point(aes(size = size,
+                 color = FDR)) +
+  scale_color_gradient2(high = "#006666",
+                        mid = "cornsilk",
+                        low = "#CC6611",
+                        midpoint = 0.05,
+                        limits = c(0,0.1)) +
+  ylab(NULL) +
+  xlab("Absolute Value NES") +
+  scale_y_discrete(labels = function(x) str_wrap(x, width = 50)) +
+  ggtitle("0:APOC1+ TAMs vs. 5: TREM2+ TAMs DEGs") +
+  theme_bw(base_size = 11) +
+  theme(plot.title = element_text(hjust=0.5, 
+                                  face="bold"))
+pp <- p + facet_grid(.~type)
+ggsave(pp,
+       filename = paste0(fig_dir, "myeloid_c0_vs_c5_degs_gsea_significant.jpeg"), 
+       width = 8, 
+       height = 7)
+
+mhcii <-
+  df %>%
+  filter(pathway == "GOBP ANTIGEN PROCESSING AND PRESENTATION OF EXOGENOUS PEPTIDE ANTIGEN VIA MHC CLASS II") %>%
+  pull(leadingEdge) %>%
+  unlist()
+VlnPlot(sub,
+        group.by = "cluster_marker_celltype",
+        cols = ct_colors,
+        features = mhcii,
+        pt.size = 0,
+        ncol = 5) &
+  geom_boxplot(outliers = F,
+               width = 0.25,
+               position = position_dodge(width = 1)) &
+  xlab(NULL)
+ggsave(filename = paste0(fig_dir, "myeloid_c0_vs_c5_degs_mhc_genes.jpeg"), 
+       width = 12, 
+       height = 8) 
+
+
+tnf <-
+  df %>%
+  filter(pathway == "HALLMARK TNFA SIGNALING VIA NFKB") %>%
+  pull(leadingEdge) %>%
+  unlist()
+genes <-
+  degs %>%
+  filter(gene %in% tnf) %>%
+  slice_min(order_by = p_val_adj,
+            n = 15) %>%
+  pull(gene) %>%
+  unlist()
+VlnPlot(sub,
+        group.by = "cluster_marker_celltype",
+        cols = ct_colors,
+        features = genes,
+        pt.size = 0,
+        ncol = 5) &
+  geom_boxplot(outliers = F,
+               width = 0.25,
+               position = position_dodge(width = 1)) &
+  xlab(NULL)
+ggsave(filename = paste0(fig_dir, "myeloid_c0_vs_c5_degs_tnf_genes.jpeg"), 
+       width = 12, 
+       height = 12) 
+```
+

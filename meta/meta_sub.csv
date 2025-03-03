@@ -1,0 +1,14 @@
+﻿Patient_ID,patientID,Age,Menopausal_Status ,Therapy,ET,Biopsy_1,Biopsy_2,Site,Best_Response,Relapse,Any_Relapse,Less_than_6mo_on_Abema,Abema_Duration,Abema_Duration_v2,Time_to_Progression,Status,Discontinuation
+Abema-004,Abema4,66,postmenopausal,Abema + fulvestrant,fulvestrant,bone,bone,bone,PR,no relapse,no relapse,No,> 6 months,> 6 months,813,on_trial,continued
+Abema-005,Abema5,40,postmenopausal,Abema + letrozole,letrozole,breast,breast,breast,PD,rapid-relapse,relapse,Yes,< 6 months,< 6 months,84,off_trial,progression
+Abema-007,Abema7,56,perimenopausal,Abema + letrozole,letrozole,breast,breast,breast,SD,relapse,relapse,No,> 6 months,> 6 months,417,off_trial,progression
+Abema-008,Abema8,53,postmenopausal,Abema + letrozole,letrozole,liver,liver,liver,SD,rapid-relapse,relapse,Yes,< 6 months,< 6 months,180,off_trial,progression
+Abema-009,Abema9,62,postmenopausal,Abema + fulvestrant,fulvestrant,liver,liver,liver,PR,rapid-relapse,relapse,No,< 6 months,< 6 months*,41,off_trial,elevated_lfts
+Abema-010,Abema10,75,postmenopausal,Abema + letrozole,letrozole,breast,breast,breast,PD,rapid-relapse,relapse,Yes,< 6 months,< 6 months*,36,off_trial,elevated_lfts
+Abema-011,Abema11,48,postmenopausal,Abema + letrozole,letrozole,breast,breast,breast,PR,relapse,relapse,No,> 6 months,> 6 months,346,off_trial,progression
+Abema-012,Abema12,75,postmenopausal,Abema + exemestane/anastrozole,anastrozole,breast,breast,breast,PR,no relapse,no relapse,No,> 6 months,> 6 months,563,on_trial,continued
+Abema-013,Abema13,64,postmenopausal,Abema + letrozole,letrozole,breast,breast,breast,SD,relapse,relapse,No,> 6 months,> 6 months,335,off_trial,progression
+Abema-014,Abema14,53,premenopausal,Abema + anastrozole,anastrozole,breast,breast,breast,SD,no relapse,no relapse,No,> 6 months,> 6 months,422,on_trial,continued
+Abema-015,Abema15,65,postmenopausal,Abema + letrozole,letrozole,liver,liver,liver,PR,no relapse,no relapse,No,> 6 months,> 6 months,320,on_trial,continued
+Abema-016,Abema16,55,postmenopausal,Abema + letrozole,letrozole,lymph node,lymph node,lymph node,PD,rapid-relapse,relapse,Yes,< 6 months,< 6 months,80,off_trial,progression
+Abema-017,Abema17,79,postmenopausal,Abema + letrozole,letrozole,lymph node,lymph node,lymph node,SD,no relapse,no relapse,No,> 6 months,> 6 months,194,on_trial ,continued

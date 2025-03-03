@@ -1,0 +1,15 @@
+﻿cluster,marker,celltype
+0,APOC1+,TAMs
+1,CCL3+,TAMs
+2,VCAN+,Monocytes
+3,CD1+,cDC2
+4, ,Unassigned 1
+5,TREM2+,TAMs
+6,LYVE1+,TAMs
+7,IRF7+,pDC
+8,COL1A1+,TAMs
+9, ,Unassigned 2
+10,CXCL9+,TAMs
+11,MT-high,TAMs
+12,LAMP3+,DC
+13,MS4A2+,Mast cells

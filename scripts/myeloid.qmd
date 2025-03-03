@@ -1,0 +1,840 @@
+---
+title: "Myeloid Analysis"
+format: html
+editor: visual
+---
+
+This notebook includes the code used to generate Figure 3 and Supplementary Figures 5-8.
+
+```{bash, eval=FALSE}
+qsub recluster_myeloid.sh
+```
+
+```{r ReadData}
+myeloid <- 
+  readRDS(paste0(data_dir,
+          "myeloid_subset_reintegrated_harmony_noAbema3_restore"))
+```
+
+```{r LabelCells}
+# add cell type labels to clusters
+ids <- 
+  read.delim(paste0(dir,"meta/myeloid_cluster_ids.csv"),
+             header = TRUE,
+             sep = ",",
+             as.is = T)
+ids$cluster_marker_celltype <-
+  ifelse(str_detect(ids$celltype, "Unassigned"),
+         paste0(ids$cluster, ":", ids$marker, "", ids$celltype),
+         paste0(ids$cluster, ":", ids$marker, " ", ids$celltype))
+
+# add cluster_marker_celltype
+anno <- 
+  ids$cluster_marker_celltype
+Idents(myeloid) <- 
+  "seurat_clusters"
+names(anno) <- 
+  levels(myeloid)
+myeloid <- 
+  RenameIdents(myeloid, anno)
+myeloid$cluster_marker_celltype <- 
+  Idents(myeloid)
+
+# add cluster_marker_celltype
+ids$cluster_celltype <-
+  paste0(ids$cluster, ": ", ids$celltype)
+anno <- 
+  ids$cluster_celltype
+Idents(myeloid) <- 
+  "seurat_clusters"
+names(anno) <- 
+  levels(myeloid)
+myeloid <- 
+  RenameIdents(myeloid, anno)
+myeloid$cluster_celltype <- 
+  Idents(myeloid)
+
+# save object
+saveRDS(myeloid,
+        paste0(dir,"/objects/myeloid_subset_reintegrated_harmony_diet.rds"))
+```
+
+```{r SetCellColors}
+# set colors for celltypes
+cl_colors <- 
+  c("#0166d8","#ec102f","#3aa609","#6524ff","#f8d147","#5ce8ef","#fd6ca0",
+    "#476ba5","#fea27a","#add465","#b775e1","#fe8f06","#5cfdc4","#feafda")
+Idents(myeloid) <- "seurat_clusters"
+names(cl_colors) <- levels(myeloid)
+
+# set colors for celltypes
+ct_colors <- 
+  c("#0166d8","#ec102f","#3aa609","#6524ff","#f8d147","#5ce8ef","#fd6ca0",
+    "#476ba5","#fea27a","#add465","#b775e1","#fe8f06","#5cfdc4","#feafda")
+Idents(myeloid) <- "cluster_marker_celltype"
+names(ct_colors) <- levels(myeloid)
+```
+
+```{r Fig3A}
+# make UMAP labeled by cluster
+DimPlot(myeloid,
+        group.by = "seurat_clusters",
+        raster = F,
+        label = T,
+        label.box = T,
+        repel = T,
+        label.size = 3,
+        cols = cl_colors) &
+  xlab("UMAP_1") &
+  ylab("UMAP_2") &
+  ggtitle("Seurat Clusters") &
+  guides(color = "none")
+ggsave(filename = paste0(fig_dir,"myeloid_umap_colored_by_cluster.jpeg"),
+       width = 6,
+       height = 4.5)
+
+# All data colored by cluster_marker_celltype with bottom legend
+DimPlot(myeloid,
+        group.by = "cluster_marker_celltype",
+        raster = F,
+        cols = ct_colors) &
+  xlab("UMAP_1") &
+  ylab("UMAP_2") &
+  ggtitle("Cluster: Cell Type") &
+  theme(legend.position = "bottom",
+        legend.justification = "center") &
+  guides(color = guide_legend(ncol = 3,
+                              override.aes = list(size=3)))
+ggsave(filename = paste0(fig_dir,"myeloid_umap_colored_by_cluster_marker_celltype_bottom_legend.jpeg"),
+       width = 9.2,
+       height = 9)
+```
+
+```{r SuppFig5A}
+# make UMAP faceted by time and site
+DimPlot(myeloid,
+        group.by = "cluster_marker_celltype",
+        raster = F,
+        pt.size = 0.6,
+        cols = ct_colors) &
+  xlab("UMAP_1") &
+  ylab("UMAP_2") &
+  ggtitle("Cluster: Cell Type")  &
+  facet_grid(rows = vars(myeloid$Time),
+             cols = vars(myeloid$site)) &
+  theme(text = element_text(size = 12),
+        strip.background = element_rect(colour = "black", 
+                                        fill = "white"),
+        legend.position = "bottom",
+        legend.justification = "center") &
+  guides(color = guide_legend(ncol = 5,
+                              override.aes = list(size=3)))
+ggsave(filename = paste0(fig_dir, "myeloid_umap_colored_by_cluster_marker_celltype_split_by_site_and_time.jpeg"),
+       width = 15,
+       height = 7)
+```
+
+```{r SuppFig5B}
+# make feature plots with canonical myeloid markers
+Idents(myeloid) <- "seurat_clusters"
+FeaturePlot(myeloid,
+            features = c("CD68","CD163","HLA-DRA",
+                         "CD14","CD1C","KIT"),
+            order = T,
+            raster = F,
+            label = F,
+            label.color = "black",
+            ncol = 3,
+            pt.size = 0.2) &
+  scale_color_continuous(type = "viridis")
+ggsave(filename = paste0(fig_dir, "myeloid_marker_featureplots.jpeg"),
+       width = 13,
+       height = 6.5)
+
+```
+
+```{r SuppFig6A}
+# make feature plots with abemaciclib targets at T1 and T2
+Idents(myeloid) <- "seurat_clusters"
+p <-
+  FeaturePlot(myeloid,
+              split.by = "Time",
+              features = c("CDK4","CDK6","CDK2"),
+              order = T,
+              raster = F,
+              max.cutoff = 2.5,
+              pt.size = 0.2) &
+  scale_color_continuous(type = "viridis") 
+p + plot_layout(guides = "collect")
+ggsave(filename = paste0(fig_dir, "myeloid_abema_targets_featureplots_split_by_time.jpeg"),
+       width = 8.5,
+       height = 10)
+
+
+Idents(myeloid) <- "seurat_clusters"
+p <-
+  FeaturePlot(myeloid,
+              features = c("CDK4","CDK6","CDK2"),
+              order = T,
+              raster = F,
+              max.cutoff = 2.5,
+              pt.size = 0.2) &
+  scale_color_continuous(type = "viridis")
+p + plot_layout(guides = "collect")
+ggsave(filename = paste0(fig_dir, "myeloid_abema_targets_featureplots.jpeg"),
+       width = 8,
+       height = 8)
+```
+
+```{r SuppFig6B}
+# make feature plots with hormone receptors at T1 and T2
+Idents(myeloid) <- "seurat_clusters"
+p <-
+  FeaturePlot(myeloid,
+              split.by = "Time",
+              features = c("ESR1","ESR2","GPER1","PGR","AR"),
+              order = T,
+              raster = F,
+              max.cutoff = 1.6,
+              pt.size = 0.2) &
+  scale_color_continuous(type = "viridis") 
+p + plot_layout(guides = "collect")
+ggsave(filename = paste0(fig_dir, "myeloid_et_targets_featureplots_split_by_time.jpeg"),
+       width = 8.5,
+       height = 15)
+
+
+Idents(myeloid) <- "seurat_clusters"
+p <-
+  FeaturePlot(myeloid,
+              features = c("ESR1","ESR2","GPER1","PGR","AR"),
+              order = T,
+              raster = F,
+              max.cutoff = 1.6,
+              pt.size = 0.2) &
+  scale_color_continuous(type = "viridis")
+p + plot_layout(guides = "collect")
+ggsave(filename = paste0(fig_dir, "myeloid_et_targets_featureplots.jpeg"),
+       width = 8,
+       height = 8)
+```
+
+```{r SuppFig6C}
+# make violin plots with abemaciclib targets at T1 and T2
+Idents(myeloid) <- "seurat_clusters"
+p <-
+  VlnPlot(myeloid,
+          split.by = "Time",
+          features = c("CDK4","CDK6"),
+          y.max = 2.5,
+          pt.size = 0.1,
+          alpha = 0.2,
+          cols = two) &
+  stat_summary(fun = "mean",
+               geom = "crossbar",
+               width = 0.8,
+               position = position_dodge(width = 0.9),
+               linewidth = 0.5,
+               color = "#31d800",
+               show.legend = F)
+p + plot_layout(guides = "collect")
+ggsave(filename = paste0(fig_dir, "myeloid_abema_targets_violinplots_split_by_time.jpeg"),
+       width = 13,
+       height = 4)
+
+```
+
+```{r FindAllMarkers}
+# find all markers and save table
+Idents(myeloid) <- "cluster_marker_celltype"
+markers <- 
+  FindAllMarkers(myeloid,
+                 only.pos = T,
+                 assay = "RNA")
+markers <- 
+  markers %>%
+  filter(p_val_adj <= 0.05)
+write.csv(markers,
+          paste0(tbl_dir, "myeloid_find_all_markers.csv"),
+          row.names = F,
+          quote = F)
+
+top_markers <- 
+  markers %>%
+  group_by(cluster) %>%
+  slice_min(p_val_adj, 
+            n = 100) %>%
+  slice_max(avg_log2FC, n = 50) %>%
+  as.data.frame()
+write.csv(top_markers,
+          paste0(tbl_dir, "myeloid_top50_find_all_markers.csv"),
+          row.names = F,
+          quote = F)
+```
+
+```{r Fig3B}
+# make dot plot of top marker genes per cluster
+genes <-
+  list("0:APOC1+ TAMs" = c("APOC1","FTL","APOE"),
+       "1:CCL3+ TAMs" = c("CCL3","CCL4","FOS"),
+       "2:VCAN+ Monocytes" = c("VCAN","FCN1","S100A8"),
+       "3:CD1+ cDC2" = c("CD1C","FCER1A","CLEC10A"),
+       "4: Unassigned 1" = c("CD3E","GZMA","GNLY"),
+       "5:TREM2+ TAMs" = c("TREM2","SPP1","FABP5"),
+       "6:LYVE1+ TAMs" = c("LYVE1","SELENOP","FOLR2"),
+       "7:IRF7+ pDC" = c("IL3RA","IRF7","IRF8"),
+       "8:COL1A1+ TAMs" = c("COL1A1","DCN","LUM"),
+       "9: Unassigned 2" = c("IGHG1","JCHAIN","CD79A"),
+       "10:CXCL9+ TAMs" = c("CXCL9","CXCL10","CXCL11"),
+       "11:MT-high TAMs" = c("MT-CO1","MALAT1","NEAT1"),
+       "12:LAMP3+ DC" = c("LAMP3","CCR7","IL7R"),
+       "13:MS4A2+ Mast cells" = c("MS4A2","KIT","GATA2"))
+genes <-
+  genes %>%
+  unlist() %>%
+  as.character()
+DotPlot(myeloid,
+        group.by = "seurat_clusters",
+        features = genes,
+        col.min = -1,
+        col.max = 3) &
+  scale_color_continuous(type = "viridis") &
+  ylab("Cluster") &
+  theme(axis.text.x=element_text(angle=90, hjust=1),
+        legend.position = "top",
+        legend.justification = "center") 
+ggsave(filename = paste0(fig_dir,"myeloid_cluster_marker_celltype_marker_dotplot.jpeg"),
+       width = 12,
+       height = 6)
+```
+
+```{r Fig3C_SuppFig7}
+# make pathway plots with consistent scale
+# reduce information in meta data
+obj <- myeloid
+obj@meta.data <-
+  obj@meta.data[,c("cluster_marker_celltype", "Time")]
+
+# set up pathways 
+go_bp <- msigdbr(species = "Homo sapiens",
+                category = "C5",
+                subcategory = "GO:BP") %>% 
+  split(x = .$gene_symbol,
+        f = .$gs_name)
+hallmark <- msigdbr(species = "Homo sapiens",
+                category = "H")  %>% 
+  split(x = .$gene_symbol,
+        f = .$gs_name)
+kegg <- 
+  msigdbr(species = "Homo sapiens",
+          category = "C2",
+          subcategory = "CP:KEGG") %>% 
+                split(x = .$gene_symbol,
+                      f = .$gs_name)
+genesets <- 
+  c(go_bp,hallmark, kegg)
+
+# read in pathway csv
+p <-
+  read.csv("~/projects/240320_abemaimmune/pathways.csv")
+all(p$pathway %in% names(genesets)) # TRUE
+
+# select only pathways of interest
+pathways <-
+  genesets[unique(p$pathway)]
+
+# make sure we only have each gene once!
+for (p in names(pathways)){
+  pathways[[p]] <-
+    pathways[[p]] %>% unique()
+}
+  
+# make a module score for each pathway
+obj <- 
+  AddModuleScore(obj,
+                 pathways,
+                 name = names(pathways))
+
+# rename columns so they are the pathways
+colnames(obj@meta.data)[3:ncol(obj@meta.data)] <-
+  names(pathways)
+
+# calculate mean expression of each module at T1 and T2
+expr <-
+  obj@meta.data %>%
+  group_by(Time, cluster_marker_celltype) %>%
+  summarise(across(HALLMARK_ALLOGRAFT_REJECTION:GOBP_POSITIVE_REGULATION_OF_NK_T_CELL_ACTIVATION, 
+                   ~ mean(.x, na.rm = T))) %>%
+  pivot_longer(cols = 3:ncol(obj@meta.data),
+               names_to = "signature",
+               values_to = "mean_expr")
+
+# statistics 
+stats <-
+  expr %>%
+  dplyr::select(cluster_marker_celltype, signature) %>%
+  distinct() %>%
+  as.data.frame()
+stats$pvalue <-
+  "NA"
+for (c in unique(stats$cluster_marker_celltype)){
+  for (p in unique(stats$signature)){
+    tryCatch({
+    sub <-
+      obj@meta.data %>%
+      filter(cluster_marker_celltype == c)
+    sub <- 
+      sub[,c(p, "Time")]
+    test <-
+      wilcox.test(sub[,1] ~ sub[,2])
+    stats[stats$cluster_marker_celltype == c & stats$signature == p, "pvalue"] <-
+      test$p.value
+    }, error = function(e) {print(paste("cluster", c, "not enough cells"))})
+  }
+}
+stats$FDR <-
+  p.adjust(stats$pvalue,
+           method = "BH")
+write.table(stats,
+            paste0(tbl_dir, "myeloid_all_patients_pathway_stats.csv"),
+            sep = ",",
+            row.names = F,
+            quote = F)
+
+stats[stats$cluster_marker_celltype == "19: Unassigned 4", "FDR"] <- 1
+
+# add asterisk
+stats$sig <- ""
+for (i in 1:nrow(stats)) {
+  if (stats[i,"FDR"] > 0.05) {
+    stats[i,"sig"] <- ""
+  } else if (stats[i,"FDR"] <= 0.0001) {
+    stats[i,"sig"] <- "****"
+  } else if (stats[i,"FDR"] <= 0.001) {
+    stats[i,"sig"] <- "***"
+  } else if (stats[i,"FDR"] <= 0.01) {
+    stats[i,"sig"] <- "**"
+  } else if (stats[i,"FDR"] <= 0.05) {
+    stats[i,"sig"] <- "*"
+  }
+}
+
+for (i in 1:nrow(stats)){
+  ct <- 
+    stats[i, "cluster_marker_celltype"]
+  p <- 
+    stats[i, "signature"]
+  expr[expr$cluster_marker_celltype == ct &
+         expr$signature == p &
+         expr$Time == "T2", "pvalue"] <-
+    stats[i, "pvalue"]
+  expr[expr$cluster_marker_celltype == ct &
+         expr$signature == p &
+         expr$Time == "T2", "FDR"] <-
+    stats[i, "FDR"]
+  expr[expr$cluster_marker_celltype == ct &
+         expr$signature == p &
+         expr$Time == "T2", "sig"] <-
+    stats[i, "sig"]
+}
+
+write.table(expr,
+            paste0(tbl_dir, "myeloid_all_patients_pathway_expr_stats.csv"),
+            sep = ",",
+            row.names = F,
+            quote = F)
+
+# center scale at 0
+for (p in unique(expr$signature)){
+  sub <-
+    expr %>%
+    filter(signature == p)
+  min <-
+    ifelse(min(sub$mean_expr) > 0,
+           0, min(sub$mean_expr))
+  plot <-
+    sub  %>%
+    ggplot(aes(x = Time,
+               y = cluster_marker_celltype,
+               fill = mean_expr)) +
+    geom_tile() +
+    scale_fill_gradient2(low="blue", 
+                         mid = "grey95",
+                         high="red", 
+                         na.value = "white",
+                         midpoint = 0,
+                         limits = c(min, max(sub$mean_expr)),
+                         name = "Mean Module\nExpression",
+                         labels = label_number(accuracy = 0.01)) +
+    scale_y_discrete(expand = expand_scale(mult = c(0, 0))) +
+    scale_x_discrete(expand = expand_scale(mult = c(0, 0)),
+                     position = "top") +
+    geom_text(data = sub,
+              aes(label = sig),
+              colour = "black",
+              size = 10/.pt,
+              vjust = 0.5,
+              hjust = 0.5) +
+    theme_bw() +
+    xlab(NULL) +
+    ylab(NULL) +
+    coord_fixed(ratio = 0.25) +
+    ggtitle(gsub("_", " ", p) %>%
+              str_wrap(width = 30)) +
+    theme(strip.background = element_rect(color = "black",
+                                          fill = "white"),
+          strip.placement = "outside",
+          panel.spacing = unit(5,"pt"),
+          plot.title = element_text(hjust = 0.5,
+                                    face = "bold",
+                                    size = 11),
+          legend.position = "bottom",
+          legend.key.height = unit(3, "mm"),
+          legend.key.width =  unit(1, "cm"),
+          legend.title.position = "top",
+          legend.title = element_text(hjust = 0.5, size = 10),
+          panel.grid.major = element_line(colour = "white"))
+  ggsave(plot,
+         filename = paste0(fig_dir, "pathway_mid0/myeloid_all_patients_", str_to_lower(p),"_heatmap.jpeg"),
+         height = 4.5,
+         width = 6)
+}
+
+# center scale at median expression
+for (p in unique(expr$signature)){
+  sub <-
+    expr %>%
+    filter(signature == p)
+  plot <-
+    sub  %>%
+    ggplot(aes(x = Time,
+               y = cluster_marker_celltype,
+               fill = mean_expr)) +
+    geom_tile() +
+    scale_fill_gradient2(low="blue", 
+                         mid = "grey95",
+                         high="red", 
+                         na.value = "white",
+                         midpoint = median(sub$mean_expr),
+                         name = "Mean Module\nExpression") +
+    scale_y_discrete(expand = expand_scale(mult = c(0, 0))) +
+    scale_x_discrete(expand = expand_scale(mult = c(0, 0)),
+                     position = "top") +
+    geom_text(data = sub,
+              aes(label = sig),
+              colour = "black",
+              size = 10/.pt,
+              vjust = 0.5,
+              hjust = 0.5) +
+    theme_bw() +
+    xlab(NULL) +
+    ylab(NULL) +
+    coord_fixed(ratio = 0.25) +
+    ggtitle(gsub("_", " ", p) %>%
+              str_wrap(width = 30)) +
+    theme(strip.background = element_rect(color = "black",
+                                          fill = "white"),
+          strip.placement = "outside",
+          panel.spacing = unit(5,"pt"),
+          plot.title = element_text(hjust = 0.5,
+                                    face = "bold",
+                                    size = 11),
+          legend.position = "bottom",
+          legend.key.height = unit(3, "mm"),
+          legend.key.width =  unit(1, "cm"),
+          legend.title.position = "top",
+          legend.title = element_text(hjust = 0.5, size = 10),
+          panel.grid.major = element_line(colour = "white"))
+  ggsave(plot,
+         filename = paste0(fig_dir, "pathway_midMedian/myeloid_all_patients_", str_to_lower(p),"_heatmap.jpeg"),
+         height = 4.5,
+         width = 6)
+}
+
+```
+
+```{r Fig3D}
+# make a dot plot with MHCII expression in TAM clusters
+tams <-
+  c(unique(myeloid$cluster_marker_celltype)[grep("TAMs", unique(myeloid$cluster_marker_celltype))],
+    unique(myeloid$cluster_marker_celltype)[grep("DC", unique(myeloid$cluster_marker_celltype))])
+mhc <-
+  c("HLA-DRA","HLA-DRB5","HLA-DRB1","HLA-DQA1","HLA-DQB1",
+    "HLA-DQA2","HLA-DQB2","HLA-DOB","HLA-DMB","HLA-DMA",
+    "HLA-DOA","HLA-DPA1","HLA-DPB1")
+
+# get expresssion data
+df <-
+  GetAssayData(myeloid,
+               assay = "RNA",
+               slot = "data") %>%
+  as.data.frame()
+df <-
+  df[mhc,] %>%
+  t() %>%
+  as.data.frame()
+
+# calculate median signature
+signatures <-
+  myeloid@meta.data[,c("Time","cluster_marker_celltype")]
+all(rownames(signatures) == rownames(df))
+signatures <-
+  cbind(signatures, df)
+expr <-
+  signatures %>%
+  group_by(Time, cluster_marker_celltype) %>%
+  summarise(across(`HLA-DRA`:`HLA-DPB1`, 
+                   ~ mean(.x, na.rm = T))) %>%
+  pivot_longer(cols = 3:ncol(signatures),
+               names_to = "gene",
+               values_to = "mean_expr")
+for (t in c("T1", "T2")){
+  for (c in unique(expr$cluster_marker_celltype)){
+    cc <-
+      signatures %>%
+      filter(Time == t &
+               cluster_marker_celltype == c)
+    for (g in unique(expr$gene)){
+      expr[expr$Time == t &
+             expr$cluster_marker_celltype == c &
+             expr$gene == g,
+           "pct_expr"] <-
+        sum(cc[,g] > 0) / nrow(cc) *100
+    }
+  }
+}
+
+# order genes
+expr$gene <-
+  factor(expr$gene,
+         levels = mhc)
+
+# plot
+expr %>%
+  filter(cluster_marker_celltype %in% tams) %>%
+  ggplot(aes(x = Time,
+             y = cluster_marker_celltype,
+             color = mean_expr,
+             size = pct_expr)) +
+  geom_point() +
+  facet_grid(cols = vars(gene)) +
+  scale_color_continuous(type = "viridis",
+                        name = "Mean\nExpression",
+                        limits = c(0,5.5),
+                        breaks = seq(0,5, by = 1),
+                        na.value = "#FDE725FF") +
+  scale_x_discrete(position = "top") +
+  scale_size_continuous(name = "%\nExpression",
+                        limits = c(0,100)) +
+  theme_bw() +
+  xlab("") +
+  ylab("") +
+  theme(strip.background = element_rect(color = "black",
+                                        fill = "white"),
+        strip.placement = "outside",
+        panel.spacing = unit(5,"pt"),
+        plot.title = element_text(hjust = 0.5,
+                                  face = "bold"),
+        panel.grid.major = element_line(colour = "white")) 
+ggsave(filename = paste0(fig_dir, "myeloid_mhc_dotplot.jpeg"),
+       height = 4.25,
+       width = 13)
+
+
+# make module score and violin plot
+macs <- 
+  subset(myeloid,
+         cluster_marker_celltype %in% tams)
+mhc <- list("MHCII" = mhc)
+macs <- 
+  AddModuleScore(macs,
+                 features = mhc,
+                 name = "MHCII",
+                 assay = "RNA")
+VlnPlot(macs,
+        features = c("MHCII1"),
+        group.by = "cluster_marker_celltype",
+        split.by = "Time",
+        cols = two,
+        alpha = 0.3) &
+  xlab(NULL) &
+  ylab("Module Score") &
+  ggtitle("MHCII Gene Score") &
+  stat_summary(fun = "mean",
+               geom = "crossbar",
+               width = 0.8,
+               position = position_dodge(width = 0.9),
+               linewidth = 0.5,
+               color = "#31d800",
+               show.legend = F) &
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom",
+        legend.justification = "center")
+ggsave(filename = paste0(fig_dir, "myeloid_mhc_module_violinplot.jpeg"),
+       height = 5,
+       width = 6.5)
+
+# perform stats on MHC module score expression
+mhc_score <-
+  macs@meta.data[,c("Time","cluster_marker_celltype", "MHCII1")]
+
+stats <- data.frame()
+for (c in unique(mhc_score$cluster_marker_celltype)){
+  t1 <-
+   mhc_score[mhc_score$Time == "T1" & mhc_score$cluster_marker_celltype == c, "MHCII1"]
+  t2 <-
+    mhc_score[mhc_score$Time == "T2" & mhc_score$cluster_marker_celltype == c, "MHCII1"]
+  pval <-
+    wilcox.test(t1, t2)
+  stats <- 
+    rbind(stats, c(c, mean(t1), mean(t2), pval$p.value))
+}
+colnames(stats) <-
+  c("cluster_marker_celltype","T1_mean", "T2_mean", "pval")
+stats$FDR <-
+  p.adjust(stats$pval, "BH")
+write.csv(stats,
+          paste0(fig_dir, "myeloid_mhc_module_violinplot.csv"),
+          row.names = F,
+          quote = F) 
+```
+
+```{r Fig3E}
+# make trend plots in all data
+# set colors
+patients <- 
+  c("#FFC107", "#449AE4", "#78B389", "#B32357", "#e13219", "#14C7BA", "#871C9A",
+    "#FD8305", "#3B3EDE", "#E884AF", "#285d28", "#afc6fe", "#aedfca", "#2C2E9C")
+names(patients) <- 
+  c("Abema4","Abema5","Abema7","Abema8","Abema9",
+    "Abema10","Abema11","Abema12","Abema13","Abema14",
+    "Abema15","Abema16","Abema17")
+
+# make proportion table
+percent_per_cluster <- 
+  prop.table(table(myeloid$cluster_marker_celltype, 
+                   myeloid$orig.ident), 
+             margin = 2) %>%
+  as.data.frame() %>%
+  rename("Cluster" = "Var1",
+         "Sample" = "Var2",
+         "Percent" = "Freq") %>%
+  mutate(Percent = Percent*100,
+         Patient = str_split_fixed(Sample, "_", 2)[,1],
+         Time = str_split_fixed(Sample, "_", 2)[,2]) 
+write.csv(percent_per_cluster, 
+          paste0(fig_dir,"/myeloid_percent_per_cluster_marker_celltype.csv"))
+
+# use wilcoxon signed-rank test since we are comparing timepoints from the same samples
+find_stat <- function(cells, df){
+  frequencies <- df[df$Cluster == cells,]
+  stats <- wilcox.test(Percent ~ Time,
+                       data = frequencies,
+                       paired = TRUE)
+  p.value <- stats$p.value
+  return(p.value)
+}
+  
+find_trend <- function(cells, df){
+  frequencies <- 
+    df[df$Cluster == cells,]
+  frequencies$Patient <-
+    factor(frequencies$Patient,
+           levels = names(patients))
+  # use wilcoxon signed-rank test since we are comparing timepoints from the same samples
+  stats <- wilcox.test(Percent ~ Time,
+                       data = frequencies,
+                       paired = TRUE)
+  p.value <- stats$p.value
+  plot <- 
+    ggplot(data = frequencies,
+           aes(x = Time,
+               y = Percent,
+               group = Patient,
+               color = Patient)) +
+    labs(title = str_wrap(paste0(cells), width = 30),
+         subtitle = paste("p = ", round(p.value, digits = 5))) +
+    geom_line() +
+    geom_point() +
+    theme_bw() +
+    scale_color_manual(values = patients) +
+    xlab("Timepoint") +
+    ylab("% Myeloid Cells") +
+    ylim(0,NA) +
+    scale_x_discrete(expand = c(0.1,0.1)) +
+    theme(text = element_text(size = 12),
+          plot.subtitle = element_text(size = 9,
+                                       hjust = 0.5),
+          plot.title = element_text(hjust = 0.5,
+                                    face = "bold"))
+  return(plot)
+}
+
+# T1 vs. T2 (all samples)
+for (cells in unique(percent_per_cluster$Cluster)) {
+  plot <- find_trend(cells, percent_per_cluster)
+  stat <- find_stat(cells, percent_per_cluster)
+  cells <- gsub(" ", "_", cells) %>%
+    gsub("\\:", "", .) %>%
+    gsub("\\+", "", .)
+  if (stat <= 0.05) {
+    filename <- paste0(fig_dir, "trend_significant/myeloid_all_samples_cluster_",cells,".jpeg")
+    } else {
+      filename <- paste0(fig_dir, "trend_nonsignificant/myeloid_all_samples_cluster_",cells,".jpeg")
+      }
+  ggsave(plot,
+         filename = filename,
+         width = 4,
+         height = 4)
+}
+
+# T1 vs. T2 (< 6 months)
+less <-
+  myeloid@meta.data[myeloid@meta.data$abema_duration_v2 == "< 6 months", "patientID"] %>% 
+  unique()
+pcp <-
+  percent_per_cluster %>%
+  filter(Patient %in% less) %>%
+  filter(Cluster != "19:Unassingned 4")
+for (cells in unique(pcp$Cluster)) {
+  plot <- find_trend(cells, pcp)
+  stat <- find_stat(cells, pcp)
+  cells <- gsub(" ", "_", cells) %>%
+    gsub("\\:", "", .) %>%
+    gsub("\\+", "", .)
+  if (stat <= 0.05) {
+    filename <- paste0(fig_dir, "trend_significant/myeloid_less_than_6mo_cluster_",cells,".jpeg")
+    } else {
+      filename <- paste0(fig_dir, "trend_nonsignificant/myeloid_less_than_6mo_cluster_",cells,".jpeg")
+      }
+  ggsave(plot,
+         filename = filename,
+         width = 4,
+         height = 4)
+}
+
+# T1 vs. T2 (> 6 months)
+greater <-
+  myeloid@meta.data[myeloid@meta.data$abema_duration_v2 == "> 6 months", "patientID"] %>% 
+  unique()
+pcp <-
+  percent_per_cluster %>%
+  filter(Patient %in% greater)
+for (cells in unique(pcp$Cluster)) {
+  plot <- find_trend(cells, pcp)
+  stat <- find_stat(cells, pcp)
+  cells <- gsub(" ", "_", cells) %>%
+    gsub("\\:", "", .) %>%
+    gsub("\\+", "", .)
+  if (stat <= 0.05) {
+    filename <- paste0(fig_dir, "trend_significant/myeloid_greater_than_6mo_cluster_",cells,".jpeg")
+    } else {
+      filename <- paste0(fig_dir, "trend_nonsignificant/myeloid_greater_than_6mo_cluster_",cells,".jpeg")
+      }
+  ggsave(plot,
+         filename = filename,
+         width = 4,
+         height = 4)
+}
+```
+

@@ -1,0 +1,825 @@
+---
+title: "Signature Analysis"
+format: html
+editor: visual
+---
+
+This notebook includes code to perform suvival analysis of genes associated with the following populations:
+
+1)  Myeloid Cluster 0: APOC1+ LAMs
+2)  Myeloid Cluster 2: VCAN+ Inflammatory Monocytes
+3)  Myeloid Cluster 5: TREM2+ LAMs
+4)  Lymphoid Cluster 4: IFNG+ Activated T-cells
+5)  Lymphoid Cluster 7: AREG+ NK Cells
+6)  Lymphoid Cluster 16: TIGIT+ Exhausted T-cells
+
+In the following datasets:
+
+A)  METABRIC
+B)  AURORA
+C)  NCT03401359
+
+```{r GeneSignatures}
+# read in conserved markers
+ly_conserved <-
+  read.csv("~/projects/240320_abemaimmune/output/degs/lymphoid_subset/lymphoid_harmony_reintegrated_snn_res.0.2_conserved_markers.csv")
+my_conserved <-
+  read.csv("~/projects/240320_abemaimmune/output/degs/myeloid_subset/myeloid_harmony_reintegrated_snn_res.0.3_conserved_markers.csv")
+
+# make a list of conserved markers for clusters of interest
+gene_list <-
+    list("Myeloid Cluster 0: APOC1+ TAMs" = my_conserved[my_conserved$cluster == 0 & 
+                                                           my_conserved$max_pval <= 0.05, "gene"],
+         "Myeloid Cluster 2: VCAN+ Monocytes" = my_conserved[my_conserved$cluster == 2 & 
+                                                                            my_conserved$max_pval <= 0.05, "gene"],
+         "Myeloid Cluster 5: TREM2+ TAMs" = my_conserved[my_conserved$cluster == 5 & 
+                                                           my_conserved$max_pval <= 0.05, "gene"],
+         "Lymphoid Cluster 4: IFNG+ Activated T-cells" = ly_conserved[ly_conserved$cluster == 4 & 
+                                                                        ly_conserved$max_pval <= 0.05, "gene"],
+         "Lymphoid Cluster 7: AREG+ NK cells" = ly_conserved[ly_conserved$cluster == 7 & 
+                                                               ly_conserved$max_pval <= 0.05, "gene"],
+         "Lymphoid Cluster 16: TIGIT+ T follicular helper cells" = ly_conserved[ly_conserved$cluster == 16 & 
+                                                                          ly_conserved$max_pval <= 0.05, "gene"])
+
+# signature genes
+df <-
+  stack(gene_list)
+colnames(df) <-
+  c("gene", "signature")
+write.csv(df,
+          paste0(tbl_dir, "cluster_survival_signature.csv"),
+          row.names = F)
+
+# make a vector of the genes we're going to look at
+all_genes <-
+  gene_list %>%
+  unlist() %>%
+  unique()
+```
+
+# read in METABRIC data
+
+```{r}
+# read in expression data
+metabric_expr <- 
+  read.delim("~/ref/breast_clindata/240503_cbioportal/brca_metabric/data_mrna_illumina_microarray.txt",
+             sep = "",
+             header = T) 
+metabric_expr <-
+  metabric_expr %>%
+  filter(Hugo_Symbol %in% all_genes,
+         !duplicated(Hugo_Symbol)) %>%
+  column_to_rownames(var = "Hugo_Symbol") %>%
+  select(-Entrez_Gene_Id) %>%
+  t() %>%
+  as.data.frame() %>%
+  arrange(rownames(.))
+
+# read in meta data
+metabric_meta <- 
+  read.table("~/ref/breast_clindata/240503_cbioportal/brca_metabric/data_clinical_patient.txt", 
+             header = TRUE, 
+             fill = TRUE, 
+             sep = "\t", 
+             na.strings = "")
+metabric_meta <-
+  metabric_meta %>%
+  mutate(PATIENT_ID = gsub("-", ".", PATIENT_ID)) %>%
+  filter(PATIENT_ID %in% rownames(metabric_expr))
+
+# do patient names match?
+all(rownames(metabric_expr) == metabric_meta$PATIENT_ID) # yes
+
+# combine expression data with meta data
+metabric <-
+  cbind(metabric_meta, metabric_expr)
+
+# save combined meta data and expression data
+write.table(metabric,
+            "~/ref/breast_clindata/240503_cbioportal/brca_metabric/COMBINED_data_mrna_illumina_microarray_and_data_clinical_patient.txt",
+            row.names = T,
+            sep = "\t",
+            quote = F)
+```
+
+# read in AURORA data
+
+```{r}
+# organize expression data
+aurora_expr <-
+  read.table("~/ref/breast_clindata/GSE209998_aurora/GSE209998_AUR_129_UQN.txt",
+             sep = "",
+             header = T)
+aurora_expr <-
+  aurora_expr %>%
+  filter(!Gene %in% c("2-Mar", "1-Mar")) %>%
+  column_to_rownames(var = "Gene") %>% 
+  t() %>%
+  as.data.frame() %>%
+  arrange(rownames(.))
+
+# organize meta data
+aurora_meta <- 
+  read.csv("~/ref/breast_clindata/GSE209998_aurora/RNAseq_meta.csv",
+           fill = TRUE, 
+           sep = ",", 
+           na.strings = "")
+aurora_meta <-
+  aurora_meta[,-c(28:32)]
+for (i in 1:nrow(aurora_expr)){
+  long <- 
+    rownames(aurora_expr)[i]
+  sub <- 
+    str_remove(long, ".R.A\\d\\d\\d.\\d\\d")
+  aurora_meta[aurora_meta$BCR.Portion.barcode == sub, "expr_name"] <-
+    long
+}
+aurora_meta <-
+  aurora_meta[!is.na(aurora_meta$expr_name),]
+
+# read in survival data
+aurora_surv <- 
+  read.csv("~/ref/breast_clindata/GSE209998_aurora/RNAseq_survival.csv") %>%
+  rename("Primary_Receptor" = "First.Primary.Receptor.at.diagnosis",
+         "Metastasis_Receptor" = "Metastasis.original.receptors")
+
+# add survival data to meta data
+aurora_meta[,c(colnames(aurora_surv)[2:13])] <- NA
+columns <- colnames(aurora_meta)[29:40]
+for (i in 1:nrow(aurora_meta)){
+  pt <- 
+    aurora_meta[i,"Patient"]
+  aurora_meta[i, c(29:40)] <-
+    aurora_surv[aurora_surv$Sample == pt, columns]
+}
+
+# subset to only patients we have meta data for
+aurora_expr <-
+  aurora_expr[aurora_meta$expr_name,]
+
+# do patient names match?
+all(rownames(aurora_expr) == aurora_meta$expr_name)
+
+# combine expression data with meta data
+aurora <-
+  cbind(aurora_meta, aurora_expr)
+
+# save combined meta data and expression data
+write.table(aurora,
+            "~/ref/breast_clindata/GSE209998_aurora/COMBINED_RNA_expression_meta_survival.txt",
+            row.names = T,
+            sep = "\t",
+            quote = F)
+```
+
+# read in Seoul data
+
+```{r}
+# read in expression data
+seoul_expr <-
+  read.table("~/ref/breast_clindata/seoul/GSE186901_seoul_meta_expression.txt",
+             sep = "\t",
+             header = T)
+expr <-
+  seoul_expr[,c(2,3,4,53:ncol(seoul_expr))]
+
+# read in survival data
+seoul_surv <-
+  read.table("~/ref/breast_clindata/seoul/GSE186901_seoul_survival.txt",
+             sep = "\t",
+             header = T)
+seoul_surv <-
+  seoul_surv[,c(2:6,8,10,19)]
+colnames(seoul_surv) <-
+  c("Patient_ID",
+    "PFS_months",
+    "PD_event",
+    "Age",
+    "Menopausal_Status",
+    "RECIST_Response",
+    "Endocrine_Therapy",
+    "Follow_Up_months")
+
+# baseline data with survival information
+bl <-
+  expr[expr$Treatment_Time == "Baseline",]
+s <- 
+  seoul_surv[seoul_surv$Patient_ID %in% bl$Patient_ID,]
+bl <- 
+  merge(s, bl)
+write.table(bl,
+            "~/ref/breast_clindata/seoul/GSE186901_seoul_survival_baseline_expression.txt",
+            row.names = F,
+            quote = F,
+            sep = "\t")
+
+# baseline + PD data with survival information
+t <- 
+  table(seoul_expr$Patient_ID, 
+        seoul_expr$Treatment_Time) %>% 
+  as.data.frame() %>% 
+  filter(Freq != 0) %>% 
+  pivot_wider(names_from = "Var2", 
+              values_from = "Freq") %>% 
+  filter(Baseline == 1 & PD == 1)
+paired <-
+  expr[expr$Patient_ID %in% t$Var1,]
+s <- 
+  seoul_surv[seoul_surv$Patient_ID %in% paired$Patient_ID,]
+paired <- 
+  merge(s, paired)
+write.table(paired,
+            "~/ref/breast_clindata/seoul/GSE186901_seoul_survival_paired_bl_pd_expression.txt",
+            row.names = F,
+            quote = F,
+            sep = "\t")
+```
+
+# make survival plots for gene signatures in METABRIC data
+
+```{r}
+for (c in names(gene_list)){
+    genes <- gene_list[[c]]
+    # create a subset of the expr data that only has the sample names and genes
+    cols <- 
+      which(colnames(metabric) %in% genes)
+    sub <- 
+      metabric[,c(1:24,cols)]
+    # change NAs to 0
+    sub[is.na(sub)] <- 0
+    # get the median of every gene (column) for each patient (row)
+    sub$rowMedian <- 
+        sub %>%
+        select(c(25:ncol(sub))) %>%
+        as.matrix() %>%
+        rowMedians()
+    # add columns for surv plot
+    sub <-
+      sub %>%
+      mutate(OS = ifelse(sub$OS_STATUS == "0:LIVING", 0, 1),
+             RFS = ifelse(sub$RFS_STATUS == "0:Not Recurred", 0, 1))
+    # remove rows that have "NA" in rowMedians
+    sub <-
+        sub[!is.na(sub$rowMedian),]
+    # create a column called score that says if the patient median is above or below the population median
+    sub$median <-
+        ifelse(sub$rowMedian >= median(sub$rowMedian),
+                "High",
+                "Low")
+    # convert OS_MONTHS and RFS_MONTHS to numeric
+    sub$OS_MONTHS <- 
+        as.numeric(sub$OS_MONTHS)
+    sub$RFS_MONTHS <- 
+        as.numeric(sub$RFS_MONTHS)
+    # ER+ SAMPLES
+    # subset out ER+ patients
+    sub_er <- 
+        sub[sub$THREEGENE == "ER+/HER2- High Prolif" | sub$THREEGENE == "ER+/HER2- Low Prolif",]
+    # determine number of patients
+    npatients <- 
+        nrow(sub_er) # 1257 patients
+    # survival by OS and median expression
+    sfit <- 
+        survfit(Surv(OS_MONTHS, OS)~median, data = sub_er)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub_er,
+               pval = TRUE, 
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Overall Survival (Months)",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("METABRIC ER+ Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_metabric_os_ER_samples.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+    # survival by RFS and median expression
+    sfit <- 
+        survfit(Surv(RFS_MONTHS, RFS)~median, data = sub_er)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub_er,
+               pval = TRUE, 
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Relapse-Free Survival (Months)",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("METABRIC ER+ Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_metabric_rfs_ER_samples.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+}
+```
+
+# make survival plots for gene signatures in AURORA data
+
+```{r}
+for (c in names(gene_list)){
+    genes <- gene_list[[c]]
+    genes <- 
+        genes[genes %in% colnames(aurora)]
+    cols <- 
+        which(colnames(aurora) %in% genes)
+    sub <- 
+        aurora[,c(1:40,cols)]
+    # subset to metastasis only
+    sub <-
+        sub[sub$Sample.Type == "Metastasis",]
+    # keep only patient name, genes, and survival info
+    keep <- 
+        c("Patient","OS.Event_censor_180.months","OS.months_censor_180.months",
+            "Metastasis.OS.Event_censored_96.months","Metastasis.OS.months_censor_96.months",
+            "Primary.OS.Event","Primary.OS.months",genes)
+    sub <-
+        sub[,keep]
+    # remove multiples from sub, calculate median across samples per patient, add back
+    multiples <- 
+        c("AD9G","AER2","AFE5","AFE6","AFUK","AD9E","AD9F",
+            "AD9H","AFE4","AFE7","AFEC","AFE9","AFEA","AER6")
+    s <- 
+        sub[sub$Patient %in% multiples,]
+    sub <-
+        sub[!(sub$Patient %in% multiples),]
+    for (p in unique(s$Patient)){
+        ss <-
+            s[s$Patient == p,]
+        meds <- 
+            ss[,genes] %>%
+            t() %>%
+            rowMedians()
+        ss[1,genes] <-
+            meds
+        sub <- 
+            rbind(sub,
+                ss[1,])
+    }
+    # do survival plots
+    # change NAs to 0
+    sub[is.na(sub)] <- 0
+    # get the median of every gene (column) for each patient (row)
+    sub$rowMedian <- 
+        sub %>%
+        select(8:ncol(sub)) %>%
+        as.matrix() %>%
+        rowMedians()
+    # remove rows that have "NA" in rowMedians
+    sub <-
+        sub[!is.na(sub$rowMedian),]
+    # create a column called score that says if the patient median is above or below the population median
+    sub$median <-
+        ifelse(sub$rowMedian >= median(sub$rowMedian),
+                "High",
+                "Low")
+    # determine number of patients
+    npatients <- 
+        nrow(sub) # 48 patients
+    # survival by Primary OS and median expression
+    sfit <- 
+        survfit(Surv(Primary.OS.months, Primary.OS.Event)~median, data = sub)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub,
+               pval = TRUE, 
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Overall Survival (Months) from Primary Diagnosis",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("AURORA Metastatic Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_aurora_primary_os_metastatic_samples.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+    # survival by Metastasis OS and median expression
+    sfit <- 
+        survfit(Surv(Metastasis.OS.months_censor_96.months, Metastasis.OS.Event_censored_96.months)~median, data = sub)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub,
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Metastasis Overall Survival (Months)",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("AURORA Metastatic Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_aurora_metastasis_os_metastatic_samples.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+}
+```
+
+# make survival plots for gene signatures in Seoul data
+
+```{r}
+groups <-
+  list("All" = c("PR","SD","PD","CR"),
+       "Responsive" = c("PR", "CR"),
+       "Stable" = c("SD"),
+       "Non-Responsive" = c("PD"))
+for (c in names(gene_list)){
+  genes <- gene_list[[c]]
+  sub <- 
+    bl[,c(1:10,which(colnames(bl) %in% genes))]
+  v <-
+    sub %>%
+    column_to_rownames(var = "Patient_ID") %>%
+    dplyr::select(-c(PFS_months,
+              PD_event,
+              Age,
+              Menopausal_Status,
+              RECIST_Response,
+              Endocrine_Therapy,
+              Follow_Up_months,
+              Sample_ID,
+              Treatment_Time)) %>%
+    as.matrix()
+  sub$median <-
+    rowMedians(v)
+  # create a column called score that says if the patient median is above or below the population median
+  sub$median_group <-
+    ifelse(sub$median >= median(sub$median),
+           "High",
+           "Low")
+  for (g in names(groups)){
+    s <-
+      sub[sub$RECIST_Response %in% groups[[g]],]
+    # survival by Primary OS and median expression
+    sfit <- 
+        survfit(Surv(PFS_months, PD_event)~median_group, data = s)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = s,
+               pval = TRUE, 
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Progression-Free Survival (Months)",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("NCT03401359 ", g," Metastatic Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_seoul_primary_os_", g,"_metastatic_samples.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 7,
+           height = 5)
+  }
+}
+```
+
+# compare expression of signatures at baseline in different patient groups
+
+```{r}
+bl <- read.table("~/ref/breast_clindata/seoul/GSE186901_seoul_survival_baseline_expression.txt", 
+                 sep = "\t", 
+                 header = T)
+bl$RECIST_Response <-
+  factor(bl$RECIST_Response,
+         levels = c("PD","SD","PR","CR"))
+
+for (c in names(gene_list)){
+  genes <- gene_list[[c]]
+  cols <- 
+    which(colnames(bl) %in% genes) # should be 22
+  sub <- 
+    bl[,c(1:10,cols)]
+  v <-
+    sub %>%
+    column_to_rownames(var = "Patient_ID") %>%
+    dplyr::select(genes[genes %in% colnames(sub)]) %>%
+    as.matrix()
+  sub$median <-
+    rowMedians(v)
+  stats <-
+    TukeyHSD(aov(data = sub, 
+                 formula = median ~ RECIST_Response))
+  file <-
+    paste0(fig_dir, "survival/", c,"_median_seoul_baseline_expression_boxplot") %>%
+    gsub(" ", "_", .) %>%
+    gsub("\\:", "", .) %>%
+    gsub("\\+", "", .)
+  write.csv(as.data.frame(stats$RECIST_Response),
+            paste0(file, ".csv"))
+  sub %>%
+    ggplot(aes(x = RECIST_Response,
+               y = median,
+               fill = RECIST_Response)) +
+    geom_boxplot(outliers = F) + 
+    geom_point(position = position_jitterdodge(jitter.width = 0.4),
+               size = 0.8,
+               alpha = 0.5) +
+    scale_fill_manual(values = c("#62b7d5","#db7eac","#e7cc56","#89b46e")) +
+    theme_bw() +
+    guides(fill = "none") +
+    ylab("Median Expression") + 
+    xlab("RECIST Response") +
+    ggtitle(paste0("NCT03401359 Metastatic Patients\n",gsub("\\:", ":\n",c))) +
+    theme(plot.title = element_text(hjust = 0.5,
+                                    face = "bold"))
+  ggsave(filename = paste0(file, ".jpeg"),
+         width = 4,
+         height = 4)
+}
+
+```
+
+# compare expression of clusters in pd patients at bl and pd
+
+```{r}
+paired <-
+  read.delim("~/ref/breast_clindata/seoul/GSE186901_seoul_survival_paired_bl_pd_expression.txt",
+             sep = "\t")
+
+for (c in names(gene_list)){
+  genes <- gene_list[[c]]
+  cols <- 
+    which(colnames(paired) %in% genes) 
+  sub <- 
+    paired[,c(1:10,cols)]
+  v <-
+    sub %>%
+    column_to_rownames(var = "Sample_ID") %>%
+    dplyr::select(genes[genes %in% colnames(sub)]) %>%
+    as.matrix()
+  sub$median <-
+    rowMedians(v)
+  # use wilcoxon signed-rank test since we are comparing timepoints from the same samples
+  stats <- wilcox.test(median ~ Treatment_Time,
+                       data = sub,
+                       paired = TRUE)
+  p.value <- stats$p.value
+  # make plot
+  ggplot(data = sub,
+         aes(x = Treatment_Time,
+             y = median,
+             group = Patient_ID,
+             color = Patient_ID)) +
+    labs(title = paste0(paste0("NCT03401359 Metastatic Patients\n",gsub("\\:", ":\n",c))),
+         subtitle = paste("p = ", round(p.value, digits = 5))) +
+    geom_line() +
+    geom_point() +
+    theme_bw() +
+    xlab("Timepoint") +
+    ylab("Median Expression") +
+    scale_x_discrete(expand = c(0.2,0.2)) +
+    theme(plot.title = element_text(hjust=0.5,
+                                    face = "bold"),
+          plot.subtitle = element_text(hjust=0.5),
+          text = element_text(size = 12))
+  file <-
+      paste0(fig_dir, "survival/", c,"_median_seoul_paired_pd_expression_lineplot.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+  ggsave(filename = file,
+         width = 6,
+         height = 6)
+}
+```
+
+# Repeat AURORA data not subsetting for repeat patients
+
+```{r}
+for (c in names(gene_list)){
+    genes <- gene_list[[c]]
+    genes <- 
+        genes[genes %in% colnames(aurora)]
+    cols <- 
+        which(colnames(aurora) %in% genes)
+    sub <- 
+        aurora[,c(1:40,cols)]
+    # subset to metastasis only
+    sub <-
+        sub[sub$Sample.Type == "Metastasis",]
+    # keep only patient name, genes, and survival info
+    keep <- 
+        c("Patient","OS.Event_censor_180.months","OS.months_censor_180.months",
+            "Metastasis.OS.Event_censored_96.months","Metastasis.OS.months_censor_96.months",
+            "Primary.OS.Event","Primary.OS.months",genes)
+    sub <-
+        sub[,keep]
+    # do survival plots
+    # change NAs to 0
+    sub[is.na(sub)] <- 0
+    # get the median of every gene (column) for each patient (row)
+    sub$rowMedian <- 
+        sub %>%
+        select(8:ncol(sub)) %>%
+        as.matrix() %>%
+        rowMedians()
+    # remove rows that have "NA" in rowMedians
+    sub <-
+        sub[!is.na(sub$rowMedian),]
+    # create a column called score that says if the patient median is above or below the population median
+    sub$median <-
+        ifelse(sub$rowMedian >= median(sub$rowMedian),
+                "High",
+                "Low")
+    # determine number of patients
+    npatients <- 
+        nrow(sub) # 79 TUMORs
+    # survival by Primary OS and median expression
+    sfit <- 
+        survfit(Surv(Primary.OS.months, Primary.OS.Event)~median, data = sub)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub,
+               pval = TRUE, 
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Overall Survival (Months) from Primary Diagnosis",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("AURORA Metastatic Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_aurora_primary_os_metastatic_samples_v2.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+    # survival by Metastasis OS and median expression
+    sfit <- 
+        survfit(Surv(Metastasis.OS.months_censor_96.months, Metastasis.OS.Event_censored_96.months)~median, data = sub)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub,
+               pval = TRUE, 
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Metastasis Overall Survival (Months)",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("AURORA Metastatic Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_aurora_metastasis_os_metastatic_samples_v2.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+}
+```
+
+# make survival plots for gene signatures in AURORA data - primary samples
+
+```{r}
+for (c in names(gene_list)){
+    genes <- gene_list[[c]]
+    genes <- 
+        genes[genes %in% colnames(aurora)]
+    cols <- 
+        which(colnames(aurora) %in% genes)
+    sub <- 
+        aurora[,c(1:40,cols)]
+    # subset to metastasis only
+    sub <-
+        sub[sub$Sample.Type == "Primary",]
+    # keep only patient name, genes, and survival info
+    keep <- 
+        c("Patient","OS.Event_censor_180.months","OS.months_censor_180.months",
+            "Metastasis.OS.Event_censored_96.months","Metastasis.OS.months_censor_96.months",
+            "Primary.OS.Event","Primary.OS.months",genes)
+    sub <-
+        sub[,keep]
+    # do survival plots
+    # change NAs to 0
+    sub[is.na(sub)] <- 0
+    # get the median of every gene (column) for each patient (row)
+    sub$rowMedian <- 
+        sub %>%
+        select(8:ncol(sub)) %>%
+        as.matrix() %>%
+        rowMedians()
+    # remove rows that have "NA" in rowMedians
+    sub <-
+        sub[!is.na(sub$rowMedian),]
+    # create a column called score that says if the patient median is above or below the population median
+    sub$median <-
+        ifelse(sub$rowMedian >= median(sub$rowMedian),
+                "High",
+                "Low")
+    # determine number of patients
+    npatients <- 
+        nrow(sub) # 48 patients
+    # survival by Primary OS and median expression
+    sfit <- 
+        survfit(Surv(Primary.OS.months, Primary.OS.Event)~median, data = sub)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub,
+               pval = TRUE, 
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Overall Survival (Months) from Primary Diagnosis",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("AURORA Metastatic Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_aurora_primary_os_primary_samples.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+    # survival by Metastasis OS and median expression
+    sfit <- 
+        survfit(Surv(Metastasis.OS.months_censor_96.months, Metastasis.OS.Event_censored_96.months)~median, data = sub)
+    plot(sfit)
+    ggsurvplot(fit = sfit, 
+               data = sub,
+               pval.method = F, 
+               pval.coord = c(0, 0.03),
+               legend.labs = c("Above\nMedian", "Below\nMedian"), 
+               xlab = "Metastasis Overall Survival (Months)",
+               ylab = "Survival Probability",
+               legend.title = "Gene Signature Score",
+               legend = "top",
+               title = paste0("AURORA Metastatic Patients\n",c),
+               palette = c("#DC3220", "#005AB5"),
+               font.title = c("bold"),
+               ggtheme = theme_classic() + 
+                 theme(plot.title = element_text(hjust = 0.5)))
+    file <-
+      paste0(fig_dir, "survival/", c, "_median_aurora_metastasis_os_primary_samples.jpeg") %>%
+      gsub(" ", "_", .) %>%
+      gsub("\\:", "", .) %>%
+      gsub("\\+", "", .)
+    ggsave(file,
+           width = 6,
+           height = 4.5)
+}
+```

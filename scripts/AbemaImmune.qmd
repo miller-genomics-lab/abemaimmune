@@ -1,0 +1,102 @@
+---
+title: "AbemaImmune"
+author: "Corinne Strawser"
+date: "November 14, 2024"
+title-block-banner: true
+format:
+    html:
+        toc: true
+        toc_float: true
+        toc_depth: 5
+        number_sections: false
+        code-fold: true
+        code-link: true
+        df-print: kable
+        self-contained: true
+execute:
+    cache: true
+knitr:
+    opts_chunk:
+        cache.lazy: false
+        echo: FALSE
+        error: FALSE
+        cache: TRUE
+        message: FALSE
+        warning: FALSE
+lightbox: true
+---
+
+# Sample summary
+
+# Technical details
+
+# Libraries
+```{r}
+library(Seurat)
+library(tidyverse)
+library(clustree)
+library(RColorBrewer)
+library(msigdbr)
+library(fgsea)
+library(data.table)
+library(pheatmap)
+library(viridis)
+library(patchwork)
+library(clusterProfiler)
+library(enrichplot)
+library(matrixStats)
+library(survival)
+library(survminer)
+library(scales)
+```
+
+# Directories
+```{r Dirs}
+data_dir <- "~/projects/240320_abemaimmune/output/objects/"
+fig_dir <- "~/projects/240320_abemaimmune/manuscript/figures/"
+tbl_dir <- "~/projects/240320_abemaimmune/manuscript/tables/"
+dir <- "~/projects/240320_abemaimmune/manuscript/"
+```
+
+# Colors
+```{r Colors}
+colors <- c("#0166d8", "#ec102f", "#3aa609", "#6524ff", "#f8d147", "#5ce8ef", "#fd6ca0",
+            "#476ba5", "#fea27a", "#add465", "#b775e1", "#fe8f06", "#5cfdc4", "#feafda",
+            "#00228b", "#fd5925", "#166d2a", "#a90aa1", "#f3c011", "#5ac7dc", "#c1c2f5",
+            "#1f29a1", "#e13224", "#86ec5a", "#672396", "#e1c637", "#069668", "#fcb2c7",
+            "#1288da", "#c26a6b", "#6e9d50", "#1e0e76", "#fea53b", "#15729c", "#ffa8ff",
+            "#270fe2", "#8a1341", "#285d28", "#956bed", "#f79302", "#116966", "#d945c2",
+            "#94a6fd", "#e13219", "#01c472", "#afc6fe", "#e3c60b", "#aedfca", "#c2639f",
+            "#0e2450", "#6d1a44", "#91fc40", "#5858e1", "#fca283", "#1eefc9", "#fb2076", 
+            "#8bd0eb")
+patients <- c("#FFC107", "#449AE4", "#78B389", "#B32357", "#e13219", "#14C7BA", "#871C9A",
+              "#FD8305", "#3B3EDE", "#E884AF", "#285d28", "#afc6fe", "#aedfca", "#2C2E9C")
+two <- c("#1288da", "#fd6ca0")
+```
+
+# Full data set analysis and subsetting (Figure 1 and Supplemental Figure 1)
+
+{{< include full.qmd >}}
+
+# Lymphoid data set analysis (Figure 2 and Supplemental Figure 2-3)
+
+{{< include lymphoid.qmd >}}
+
+# Myeloid data set analysis (Figure 3 and Supplemental Figure 5-7)
+
+{{< include myeloid.qmd >}}
+
+# Comparison of myeloid cell clusters 0 and 5 (Supplemental Figure 8)
+
+{{< include myeloid_cluster0_vs_cluster5.qmd >}}
+
+# Lymphoid and myeloid cell type signature analysis (Supplemental Figure 4 and Fig 4)
+
+{{< include signature.qmd >}}
+
+# Environment Info
+
+```{r sessionInfo}
+sessionInfo()
+```
+

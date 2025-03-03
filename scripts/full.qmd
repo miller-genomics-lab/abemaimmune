@@ -1,0 +1,368 @@
+---
+title: "Full Data"
+format: html
+editor: visual
+---
+
+This notebook includes the code used to generate Figure 1 and Supplementary Figure 1.
+
+```{bash, eval=FALSE}
+qsub initial_analysis.sh
+```
+
+```{r ReadData}
+data <- 
+  readRDS(paste0(data_dir,"/Sammon_list1.integrated_clustered_annotated_major_minor_cell_ids_final_noAbema3.rds"))
+```
+
+```{r AddMetaData}
+meta <- 
+  read.csv(paste0(dir, "meta/meta_sub.csv"))
+
+# subset to only patients we want to keep
+Idents(data) <- "patientID"
+data <- 
+  subset(data,
+         idents = meta$patientID)
+meta <- 
+  meta[levels(data),]
+#make vectors for the idents
+new_cols <- 
+  as.list(meta)
+# add to data
+for (group in names(new_cols)){
+  Idents(data) <- 
+    "patientID"
+  new_data <- 
+    new_cols[[group]]
+  names(new_data) <- 
+    levels(data)
+  data <- 
+    RenameIdents(data, new_data)
+  data[[group]] <- 
+    Idents(data)
+}
+```
+
+```{r LabelCells}
+# add in infercnv data
+cells <- 
+  read.table(paste0(dir,"infercnv/data_annotation.txt"))
+cells <- 
+  cells$V1
+sub <- 
+  subset(data, 
+         cells = cells)
+sub <- 
+  infercnv::add_to_seurat(infercnv_output_path="./output/infercnv/infercnv_out",
+                          seurat_obj=sub, # optional
+                          top_n=10)
+feats <-
+  colnames(sub@meta.data)[grep("proportion_scaled_cnv", colnames(sub@meta.data))]
+DotPlot(sub,
+        features = feats,
+        group.by = "seurat_clusters",
+        scale = F) &
+  coord_flip() &
+  scale_color_gradient2(low="#2A0134", 
+                        mid = "cyan4",
+                        high="yellow",
+                        na.value = "#2A0134",
+                        midpoint = 0.1,
+                        limits = c(0,0.2)) 
+ggsave(filename = paste0(dir, "infercnv/infercnv_cluster_summary.jpeg"),
+       width = 20,
+       height = 5)
+cnv <- 
+  sub@meta.data[,c("seurat_clusters", feats)]
+cnv$sum <-
+  rowSums(cnv[2:ncol(cnv)])
+cnv <- 
+  cnv %>%
+  group_by(seurat_clusters) %>%
+  summarize(median = median(sum),
+            average = mean(sum),
+            minimum = min(sum),
+            maximum = max(sum)) %>%
+  as.data.frame()
+write.csv(cnv,
+          paste0(dir, "infercnv/infercnv_cluster_summary.csv"),
+          row.names = F)
+
+# read in annotation csv
+ids <- 
+  read.delim(paste0(dir, "meta/cluster_ids.csv"),
+             header = TRUE,
+             sep = ",")
+ids <- 
+  ids[order(ids$Cluster),]
+# add broad cell types
+anno <- 
+  ids$Cell_Type
+Idents(data) <- "seurat_clusters"
+names(anno) <- 
+  levels(data)
+data <- 
+  RenameIdents(data, anno)
+data$broad_celltype <- 
+  Idents(data)
+# add fine cell types
+anno <- 
+  ids$Manual
+Idents(data) <- "seurat_clusters"
+names(anno) <- 
+  levels(data)
+data <-
+  RenameIdents(data, anno)
+data$fine_celltype <- 
+  Idents(data)
+# remove underscore
+data$site <- gsub("lymph_node", 
+                  "lymph node",
+                  data$site)
+
+# save object
+saveRDS(data,
+        paste0(dir,"/objects/integrated.rds"))
+```
+
+```{r SetCellColors}
+colors <- 
+  c("Myeloid" = "#0166d8", 
+    "Epithelial" = "#ec102f", 
+    "Endothelial" = "#3aa609", 
+    "Proliferating Immune" = "#f8d147", 
+    "Plasmablasts" = "#6524ff",  
+    "CAF" = "#fd6ca0", 
+    "NK cell" = "#069668", 
+    "T-cell" = "#fe8f06", 
+    "B-cell" = "#5ce8ef")
+```
+
+```{r Fig1B}
+# UMAP
+DimPlot(data,
+        group.by = "broad_celltype",
+        cols = colors,
+        raster = F,
+        shuffle = T) &
+  ylab("UMAP_2") &
+  xlab("UMAP_1") &
+  ggtitle("Broad Cell Types")
+ggsave(filename = paste0(dir, "figures/full_umap_colored_by_broad_cell_types.jpeg"),
+       width = 8,
+       height = 5,
+       units = "in")
+
+# UMAP
+DimPlot(data,
+        group.by = "broad_celltype",
+        cols = colors,
+        raster = F,
+        shuffle = T) &
+  ylab("UMAP_2") &
+  xlab("UMAP_1") &
+  ggtitle("Broad Cell Types") &
+  theme(legend.position = "bottom",
+        legend.justification = "center") &
+  guides(color = guide_legend(nrow = 3,
+                              override.aes = list(size=3)))
+ggsave(filename = paste0(dir, "figures/full_umap_colored_by_broad_cell_types_bottom_legend.jpeg"),
+       width = 6,
+       height = 6,
+       units = "in")
+```
+
+```{r SuppFig1A}
+# All data colored by patient
+pt_colors <- 
+  c("#0166d8", "#ec102f", "#3aa609", "#6524ff", "#f8d147", 
+    "#5ce8ef", "#fd6ca0", "#1288da", "#fea27a", "#add465", 
+    "#b775e1", "#fe8f06", "#5cfdc4")
+DimPlot(data,
+        group.by = "patientID",
+        raster = F,
+        cols = pt_colors,
+        pt.size = 0.8,
+        shuffle = T) &
+  xlab("UMAP_1") &
+  ylab("UMAP_2") &
+  ggtitle("Patient")
+ggsave(filename = paste0(dir, "figures/full_umap_colored_by_response.jpeg"),
+       width = 7,
+       height = 5)
+```
+
+```{r SuppFig1B}
+# All data colored by timepoint
+DimPlot(data,
+        group.by = "Time",
+        raster = F,
+        cols = c("#1288da", "#fd6ca0"),
+        pt.size = 0.8,
+        shuffle = T) &
+  xlab("UMAP_1") &
+  ylab("UMAP_2") &
+  ggtitle("Timepoint")
+ggsave(filename = paste0(dir, "figures/full_umap_colored_by_timepoint.jpeg"),
+       width = 7,
+       height = 5)
+```
+
+```{r SuppFig1C}
+DimPlot(data,
+        group.by = "broad_celltype",
+        cols = colors,
+        raster = F,
+        shuffle = T,
+        split.by = "site",
+        ncol = 2) &
+  ylab("UMAP_2") &
+  xlab("UMAP_1") &
+  ggtitle("") &
+  guides(color = "none")
+ggsave(filename = paste0(dir, "figures/full_umap_colored_by_broad_cell_types_split_by_site.jpeg"),
+       width = 8,
+       height = 7,
+       units = "in")
+```
+
+```{r Fig1C}
+genes <- 
+  c("PTPRC","CD3E","PDGFRB","CD19","CD68","PECAM1","EPCAM","SDC1","MKI67")
+
+DefaultAssay(data) <- "RNA"
+FeaturePlot(data,
+            features = genes,
+            raster = F,
+            pt.size = 0.6,
+            max.cutoff = 3.5,
+            keep.scale = "all",
+            order = T) &
+  scale_color_continuous(type = "viridis") &
+  xlab("UMAP_1") &
+  ylab("UMAP_2")
+ggsave(filename = paste0(dir, "figures/full_featureplot_cell_type_markers.jpeg"),
+       width = 13,
+       height = 9)
+```
+
+```{r Fig1D}
+# percent per major celltype
+Idents(data) <- "broad_celltype"
+percent_per_cluster <- 
+  table(Idents(data), 
+        data$orig.ident) %>%
+  prop.table(., 
+             margin = 2) %>%
+  as.data.frame()
+percent_per_cluster$Freq <- 
+  percent_per_cluster$Freq * 100
+colnames(percent_per_cluster) <- 
+  c("celltype",
+    "sample",
+    "frequency")
+tmp <- 
+  str_split_fixed(string = percent_per_cluster$sample,
+                  pattern = "_",
+                  n = 2)
+percent_per_cluster <- 
+  cbind(percent_per_cluster, 
+        tmp)
+colnames(percent_per_cluster) <- 
+  c("celltype",
+    "sample",
+    "frequency",
+    "patient",
+    "timepoint")
+# organize meta data
+meta <- 
+  read.csv(paste0(dir,"meta/meta_sub.csv"))
+rownames(meta) <- 
+  meta$patientID
+Idents(data) <- "patientID"
+meta <- 
+  meta[levels(data),]
+# add meta data to percent_per_cluster
+for (patient in (unique(percent_per_cluster$patient))){
+  percent_per_cluster[percent_per_cluster$patient == patient,"site"] <- 
+    meta[meta$patientID == patient, "Biopsy_1"]
+  percent_per_cluster[percent_per_cluster$patient == patient,"abema_duration"] <- 
+    meta[meta$patientID == patient, "Abema_Duration_v2"]
+}
+write.csv(percent_per_cluster, 
+          file=paste0(dir,"tables/full_cells_per_broad_celltype.csv"))
+percent_per_cluster$patient <- 
+  factor(percent_per_cluster$patient,
+         levels=c("Abema4","Abema7","Abema8",
+                  "Abema9","Abema11","Abema12",
+                  "Abema13","Abema14","Abema15","Abema17",
+                  "Abema5", "Abema10", "Abema16"))
+ggplot(percent_per_cluster, 
+       aes(x = frequency, 
+           y = patient, 
+           fill = celltype)) +
+  geom_col() +
+  facet_grid(rows = vars(abema_duration), 
+             cols = vars(timepoint),
+             scales="free_y",
+             space = "free_y",
+             switch = "y") +
+  scale_fill_manual(values = colors,
+                    name = "Cell Type") +
+  theme_bw() +
+  theme(text = element_text(size = 12),
+        strip.background = element_rect(colour = "black", 
+                                        fill = "white"),
+        legend.position = "bottom") +
+  xlab("Proportion of Cells") +
+  ylab("Patient ID") +
+  guides(fill = guide_legend(position = "bottom",
+                             direction = "horizontal",
+                             ncol = 3))
+ggsave(filename = paste0(dir, "figures/full_cells_per_broad_cell_types_response_barchart_bottom_legend.jpeg"),
+       width = 6,
+       height = 7.5,
+       units = "in")
+
+# stats!
+#There were no significant differences in immune cell proportions between patients who remained on treatment for greater than 6 months (> 6 months), patients who discontinued treatment due to toxicity (< 6 months*), or patients that discontinued treatment due to progression of disease (< 6 months) (Fig 1D), 
+anova <-
+  aov(data = percent_per_cluster,
+      formula = frequency ~ celltype * abema_duration * timepoint)
+anova_mc <-
+  TukeyHSD(anova)
+anova_mc_res <-
+  anova_mc$`celltype:abema_duration:timepoint` %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "comparison") %>%
+  mutate(group1_celltype = str_split_fixed(comparison, ":", n =5)[,1],
+         group1_duration = str_split_fixed(comparison, ":", n =5)[,2],
+         group1_timepoint = str_split_fixed(c(str_split_fixed(comparison, ":", n =5)[,3]), "-", n = 2)[,1],
+         group2_celltype = str_split_fixed(c(str_split_fixed(comparison, ":", n =5)[,3]), "-", n = 2)[,2],
+         group2_duration = str_split_fixed(comparison, ":", n =5)[,4],
+         group2_timepoint = str_split_fixed(comparison, ":", n =5)[,5]) %>%
+  filter(group1_celltype == group2_celltype &
+           group1_timepoint == group2_timepoint)
+write.csv(anova_mc_res,
+          paste0(dir, "tables/full_cell_proportion_changes_anova.csv"),
+          row.names = F,
+          quote = F)
+```
+
+```{r SubsetData}
+# subset lymphoid and myeloid cells for reclustering
+Idents(data) <- "broad_celltype"
+lymphoid <- 
+  subset(data, 
+         idents = c("B-cell", 
+                    "T-cell", 
+                    "NK cell", 
+                    "Plasmablasts"))
+saveRDS(lymphoid,
+        paste0(dir,"objects/lymphoid.rds"))
+myeloid <- 
+  subset(data, idents = c("Myeloid"))
+saveRDS(myeloid,
+        paste0(dir, "objects/myeloid.rds"))
+```
